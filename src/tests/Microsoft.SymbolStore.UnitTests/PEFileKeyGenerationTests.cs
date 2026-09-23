@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection.PortableExecutable;
 using Microsoft.FileFormats.PE;
 using Microsoft.SymbolStore.KeyGenerators;
 using TestHelpers;
@@ -26,9 +27,9 @@ namespace Microsoft.SymbolStore.Tests
         {
             private const uint DefaultTimestamp = 0x4D4F434B;
             private static readonly Version s_defaultVersion = new(1, 2, 3, 45);
+            private readonly byte[] _image;
 
             public ImageFileMachine Machine { get; }
-            public uint SizeOfImage { get; }
             public string FileName { get; }
             public string Id { get; }
             public bool IsRuntimeModule { get; }
@@ -36,37 +37,40 @@ namespace Microsoft.SymbolStore.Tests
             public string[] DacDbiFiles { get; }
             public string[] SosFiles { get; }
 
-            public MockPEFile(ImageFileMachine machine, uint sizeOfImage, string fileName, string id, bool isRuntimeModule, bool isSpecialFile, string[] dacDbiFiles, string[] sosFiles)
+            public MockPEFile(ImageFileMachine machine, string fileName, bool isRuntimeModule, bool isSpecialFile, string[] dacDbiFiles, string[] sosFiles)
             {
                 Machine = machine;
-                SizeOfImage = sizeOfImage;
                 FileName = fileName;
-                Id = id;
                 IsRuntimeModule = isRuntimeModule;
                 IsSpecialFile = isSpecialFile;
                 DacDbiFiles = dacDbiFiles;
                 SosFiles = sosFiles;
+
+                using MemoryStream stream = PEImageBuilder.Create(Machine, DefaultTimestamp, s_defaultVersion);
+                _image = stream.ToArray();
+                using PEReader reader = new(new MemoryStream(_image, writable: false));
+                Id = $"{reader.PEHeaders.CoffHeader.TimeDateStamp:X8}{reader.PEHeaders.PEHeader.SizeOfImage:x}";
             }
 
             public MemoryStream CreateStream()
             {
-                return PEImageBuilder.Create(Machine, DefaultTimestamp, SizeOfImage, s_defaultVersion);
+                return new MemoryStream(_image, writable: false);
             }
         }
 
         public static IEnumerable<object[]> MockPEFiles()
         {
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x434C52, "clr.dll", "4D4F434B434c52", true, false, new string[] { "mscordacwks.dll", "mscordacwks_amd64_amd64_1.2.3.45.dll", "mscordbi.dll" }, new string[] { "sos_amd64_amd64_1.2.3.45.dll" } ) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Arm64, 0x434C52, "clr.dll", "4D4F434B434c52", true, false, new string[] { "mscordacwks.dll", "mscordacwks_arm64_arm64_1.2.3.45.dll", "mscordacwks_amd64_arm64_1.2.3.45.dll", "mscordbi.dll" }, new string[] { "sos_arm64_arm64_1.2.3.45.dll", "sos_amd64_arm64_1.2.3.45.dll" }) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.I386, 0x434C52, "clr.dll", "4D4F434B434c52", true, false, new string[] { "mscordacwks.dll", "mscordacwks_x86_x86_1.2.3.45.dll", "mscordbi.dll" }, new string[] { "sos_x86_x86_1.2.3.45.dll" }) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x434C52, "coreclr.dll", "4D4F434B434c52", true, false, new string[] { "mscordaccore.dll", "mscordaccore_amd64_amd64_1.2.3.45.dll", "mscordbi.dll" }, []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Arm64, 0x434C52, "coreclr.dll", "4D4F434B434c52", true, false, new string[] { "mscordaccore.dll", "mscordaccore_arm64_arm64_1.2.3.45.dll", "mscordaccore_amd64_arm64_1.2.3.45.dll", "mscordbi.dll" }, []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.I386, 0x434C52, "coreclr.dll", "4D4F434B434c52", true, false, new string[] { "mscordaccore.dll", "mscordaccore_x86_x86_1.2.3.45.dll", "mscordbi.dll" }, []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x444143, "mscordacwks.dll", "4D4F434B444143", false, true, [], []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x444143, "mscordacwks_amd64_amd64_1.2.3.45.dll", "4D4F434B444143", false, true, [], []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x444249, "mscordbi.dll", "4D4F434B444249", false, true, [], []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x534F53, "sos.dll", "4D4F434B534f53", false, false, [], []) };
-            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, 0x534F53, "sos_amd64_amd64_1.2.3.45.dll", "4D4F434B534f53", false, true, [], []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "clr.dll", true, false, new string[] { "mscordacwks.dll", "mscordacwks_amd64_amd64_1.2.3.45.dll", "mscordbi.dll" }, new string[] { "sos_amd64_amd64_1.2.3.45.dll" } ) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Arm64, "clr.dll", true, false, new string[] { "mscordacwks.dll", "mscordacwks_arm64_arm64_1.2.3.45.dll", "mscordacwks_amd64_arm64_1.2.3.45.dll", "mscordbi.dll" }, new string[] { "sos_arm64_arm64_1.2.3.45.dll", "sos_amd64_arm64_1.2.3.45.dll" }) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.I386, "clr.dll", true, false, new string[] { "mscordacwks.dll", "mscordacwks_x86_x86_1.2.3.45.dll", "mscordbi.dll" }, new string[] { "sos_x86_x86_1.2.3.45.dll" }) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "coreclr.dll", true, false, new string[] { "mscordaccore.dll", "mscordaccore_amd64_amd64_1.2.3.45.dll", "mscordbi.dll" }, []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Arm64, "coreclr.dll", true, false, new string[] { "mscordaccore.dll", "mscordaccore_arm64_arm64_1.2.3.45.dll", "mscordaccore_amd64_arm64_1.2.3.45.dll", "mscordbi.dll" }, []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.I386, "coreclr.dll", true, false, new string[] { "mscordaccore.dll", "mscordaccore_x86_x86_1.2.3.45.dll", "mscordbi.dll" }, []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "mscordacwks.dll", false, true, [], []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "mscordacwks_amd64_amd64_1.2.3.45.dll", false, true, [], []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "mscordbi.dll", false, true, [], []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "sos.dll", false, false, [], []) };
+            yield return new object[] { new MockPEFile(ImageFileMachine.Amd64, "sos_amd64_amd64_1.2.3.45.dll", false, true, [], []) };
         }
 
         [Theory]
