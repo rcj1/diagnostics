@@ -264,6 +264,8 @@ Runtime::Runtime(ITarget* target, RuntimeConfiguration configuration, ULONG inde
 \**********************************************************************/
 Runtime::~Runtime()
 {
+    // Keep in sync with DACPRIV_REQUEST_CDAC_CLOSE in runtime's dacprivate.h.
+    constexpr ULONG32 closeRequest = 0xf1000000;
     if (m_name != nullptr)
     {
         delete [] m_name;
@@ -289,21 +291,23 @@ Runtime::~Runtime()
         free((void*)m_dbiFilePath);
         m_dbiFilePath = nullptr;
     }
-    if (m_pCorDebugProcess != NULL)
-    {
-        m_pCorDebugProcess->Detach();
-        m_pCorDebugProcess->Release();
-        m_pCorDebugProcess = nullptr;
-    }
     if (m_clrDataProcess != nullptr)
     {
+        m_clrDataProcess->Request(closeRequest, 0, nullptr, 0, nullptr);
         m_clrDataProcess->Release();
         m_clrDataProcess = nullptr;
     }
     if (m_cdacDataProcess != nullptr)
     {
+        m_cdacDataProcess->Request(closeRequest, 0, nullptr, 0, nullptr);
         m_cdacDataProcess->Release();
         m_cdacDataProcess = nullptr;
+    }
+    if (m_pCorDebugProcess != NULL)
+    {
+        m_pCorDebugProcess->Detach();
+        m_pCorDebugProcess->Release();
+        m_pCorDebugProcess = nullptr;
     }
     if (m_dbgShimHandle != nullptr)
     {

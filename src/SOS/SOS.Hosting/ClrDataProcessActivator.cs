@@ -167,6 +167,20 @@ namespace SOS.Hosting
             }
         }
 
+        internal static unsafe void CloseClrDataProcess(IntPtr process)
+        {
+            // Keep in sync with DACPRIV_REQUEST_CDAC_CLOSE in runtime's dacprivate.h.
+            const uint CloseRequest = 0xf1000000;
+            const int RequestSlot = 33;
+            delegate* unmanaged[Stdcall]<IntPtr, uint, uint, byte*, uint, byte*, int> request =
+                (delegate* unmanaged[Stdcall]<IntPtr, uint, uint, byte*, uint, byte*, int>)(*(void***)process)[RequestSlot];
+            HResult hr = request(process, CloseRequest, 0, null, 0, null);
+            if (!hr && hr != HResult.E_NOTIMPL && hr != HResult.E_INVALIDARG)
+            {
+                Trace.TraceWarning($"Closing cDAC data-access process failed (hr={hr:x8}).");
+            }
+        }
+
         private sealed class ClrDataProcess : IClrDataProcess
         {
             private IntPtr _interface;
@@ -185,6 +199,7 @@ namespace SOS.Hosting
                 IntPtr @interface = Interlocked.Exchange(ref _interface, IntPtr.Zero);
                 if (@interface != IntPtr.Zero)
                 {
+                    CloseClrDataProcess(@interface);
                     COMHelper.Release(@interface);
                 }
                 Interlocked.Exchange(ref _dataTarget, null)?.ReleaseWithCheck();

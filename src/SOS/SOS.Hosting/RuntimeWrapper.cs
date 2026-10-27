@@ -120,15 +120,16 @@ namespace SOS.Hosting
         protected override void Destroy()
         {
             Trace.TraceInformation("RuntimeWrapper.Destroy");
+            if (_clrDataProcess != IntPtr.Zero)
+            {
+                ClrDataProcessActivator.CloseClrDataProcess(_clrDataProcess);
+                ComWrapper.ReleaseWithCheck(_clrDataProcess);
+                _clrDataProcess = IntPtr.Zero;
+            }
             if (_corDebugProcess != IntPtr.Zero)
             {
                 ComWrapper.ReleaseWithCheck(_corDebugProcess);
                 _corDebugProcess = IntPtr.Zero;
-            }
-            if (_clrDataProcess != IntPtr.Zero)
-            {
-                ComWrapper.ReleaseWithCheck(_clrDataProcess);
-                _clrDataProcess = IntPtr.Zero;
             }
             if (_dacHandle != IntPtr.Zero)
             {
